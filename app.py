@@ -105,16 +105,27 @@ def get_logs():
 
 @app.route('/data/<filename>')
 def get_data(filename):
+    # Update allowed files to match your actual files
     allowed_files = ['combined_tire_data.json', 'n1.json', 'nesdekk.json', 'dekkjahollin.json',
-                     'dekkjahusid.json', 'max1.json', 'hjolbardasalan.json']
+                     'dekkjasalan.json', 'mitra.json', 'klettur.json']
     
     if filename not in allowed_files:
         return jsonify({"error": "File not found"}), 404
     
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return jsonify(data)
+        # Check both current directory and Leita subdirectory for files
+        file_paths = [
+            filename,  # Current directory
+            os.path.join('Leita', filename)  # Leita subdirectory
+        ]
+        
+        for file_path in file_paths:
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return jsonify(data)
+        
+        return jsonify({"error": "File not found"}), 404
     except FileNotFoundError:
         return jsonify({"error": "File not found"}), 404
     except json.JSONDecodeError:
