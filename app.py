@@ -3,6 +3,10 @@ import json
 import subprocess
 import threading
 from flask import Flask, jsonify, render_template, Response, stream_with_context
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__, static_folder='static')
 
@@ -10,9 +14,25 @@ app = Flask(__name__, static_folder='static')
 scraper_logs = []
 is_running = False
 
+# Database connection placeholder - will be implemented later
+db_connection = None
+
+# Initialize database connection when needed
+def init_db_connection():
+    global db_connection
+    # Uncomment this code when ready to use the database
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        from sqlalchemy import create_engine
+        db_connection = create_engine(db_url)
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/healthz')
+def health_check():
+    return jsonify({"status": "healthy"}), 200
 
 @app.route('/run-scrapers')
 def run_scrapers():
@@ -81,6 +101,16 @@ def get_data(filename):
         return jsonify({"error": "File not found"}), 404
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid JSON file"}), 500
+
+@app.route('/db-status')
+def db_status():
+    if not db_connection:
+        init_db_connection()
+    
+    if db_connection:
+        return jsonify({"status": "connected"})
+    else:
+        return jsonify({"status": "not connected", "message": "Database connection not initialized"}), 503
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
