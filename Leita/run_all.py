@@ -82,22 +82,21 @@ def run_spider(spider_name):
     """Try multiple methods to run a spider"""
     # First try the direct runner
     if os.path.exists(os.path.join(PROJECT_ROOT, "run_spider_direct.py")):
-        return run_spider_with_direct_runner(spider_name)
+        result = run_spider_with_direct_runner(spider_name)
+        if result:
+            return True
     
     # Fall back to scrapy command line
     print(f"🕷️ Running spider via scrapy command: {spider_name}")
     
-    # Change to project root directory to ensure scrapy can find the spiders
-    os.chdir(PROJECT_ROOT)
+    # Change to Leita directory to ensure scrapy can find the spiders
+    os.chdir(os.path.join(PROJECT_ROOT, "Leita"))
+    print(f"Changed directory to: {os.getcwd()}")
     
-    # Use PYTHONPATH to help scrapy find modules
-    env = os.environ.copy()
-    env['PYTHONPATH'] = PROJECT_ROOT
-    
-    # Try with the full module path
+    # Try direct scrapy command with just the spider name
     cmd = [
         'scrapy', 'crawl', 
-        f"Leita.spiders.{spider_name}.{spider_name}", 
+        spider_name, 
         '-O', os.path.join(PROJECT_ROOT, f"{spider_name}.json"),
     ]
     print(f"Running command: {' '.join(cmd)}")
@@ -107,8 +106,7 @@ def run_spider(spider_name):
         stdout=subprocess.PIPE, 
         stderr=subprocess.STDOUT,
         text=True,
-        bufsize=1,
-        env=env
+        bufsize=1
     )
     
     # Echo the output to console
@@ -121,36 +119,35 @@ def run_spider(spider_name):
     if exit_code == 0:
         print(f"✅ Finished spider: {spider_name}")
         return True
+    
+    # Last resort - try with explicit module path
+    cmd = [
+        'python', '-m', 'scrapy', 'crawl', 
+        spider_name, 
+        '-O', os.path.join(PROJECT_ROOT, f"{spider_name}.json"),
+    ]
+    print(f"Trying final command: {' '.join(cmd)}")
+    
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
+    )
+    
+    for line in iter(process.stdout.readline, ''):
+        print(line, end='', flush=True)
+    
+    process.stdout.close()
+    exit_code = process.wait()
+    
+    if exit_code == 0:
+        print(f"✅ Finished spider: {spider_name}")
+        return True
     else:
-        # Try again with just the spider name
-        cmd = [
-            'scrapy', 'crawl', 
-            spider_name, 
-            '-O', os.path.join(PROJECT_ROOT, f"{spider_name}.json"),
-        ]
-        print(f"Retry with command: {' '.join(cmd)}")
-        
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            env=env
-        )
-        
-        for line in iter(process.stdout.readline, ''):
-            print(line, end='', flush=True)
-        
-        process.stdout.close()
-        exit_code = process.wait()
-        
-        if exit_code == 0:
-            print(f"✅ Finished spider: {spider_name}")
-            return True
-        else:
-            print(f"❌ Failed spider: {spider_name} with all methods")
-            return False
+        print(f"❌ Failed spider: {spider_name} with all methods")
+        return False
 
 def merge_json_files():
     """Merge all JSON files into one combined file."""
