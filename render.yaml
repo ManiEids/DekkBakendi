@@ -2,7 +2,7 @@ services:
   - type: web
     name: DekkBakendi
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && python deploy_setup.py && pip install -e .
     startCommand: python copy_spiders.py && gunicorn app:app --timeout 600 --workers 1
     envVars:
       - key: PORT
@@ -17,6 +17,6 @@ services:
   - type: cron
     name: daily-scrape
     runtime: python
-    schedule: "0 0 * * *"  # Run at midnight every day
-    buildCommand: pip install -r requirements.txt
+    schedule: "0 0 * * *"
+    buildCommand: pip install -r requirements.txt && python deploy_setup.py && pip install -e .
     startCommand: python copy_spiders.py && python Leita/run_all.py

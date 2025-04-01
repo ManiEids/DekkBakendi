@@ -34,6 +34,21 @@ def check_environment():
         except ImportError:
             print("   Still cannot import Leita module")
     
+    # List all directories to help debug the file structure
+    print("\nListing directories to help debug:")
+    for root, dirs, files in os.walk(script_dir, topdown=True, followlinks=False):
+        if '.git' in dirs:
+            dirs.remove('.git')  # Don't want to go into the .git directory
+        if '.venv' in dirs:
+            dirs.remove('.venv')  # Skip virtual environment
+        level = root.replace(script_dir, '').count(os.sep)
+        indent = ' ' * 4 * level
+        print(f"{indent}{os.path.basename(root)}/")
+        if level <= 2:  # Only show files for the first few levels
+            for file in files:
+                if file.endswith('.py'):
+                    print(f"{indent}    {file}")
+    
     # Check if spider modules exist
     spiders_dir = os.path.join(script_dir, 'Leita', 'spiders')
     if not os.path.exists(spiders_dir):

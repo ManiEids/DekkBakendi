@@ -1,0 +1,5 @@
+include Leita/spiders/*.py
+include Leita/Leita/spiders/*.py
+include requirements.txt
+include *.py
+include *.md

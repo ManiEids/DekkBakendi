@@ -6,7 +6,8 @@ __pycache__/
 env/
 venv/
 ENV/
-# Only ignore generated JSON files in root directory
+
+# Only ignore JSON output files
 /combined_tire_data.json
 /n1.json
 /nesdekk.json
@@ -14,5 +15,8 @@ ENV/
 /dekkjasalan.json
 /mitra.json
 /klettur.json
-# Don't ignore JSON files in example_data
-!example_data/*.json
+
+# IMPORTANT: Never ignore spider source files
+!Leita/spiders/*.py
+!Leita/Leita/spiders/*.py 
+!**/spiders/*.py
