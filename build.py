@@ -11,6 +11,8 @@ def run_command(cmd):
         sys.exit(result.returncode)
     return result
 
+print("Starting build process...")
+
 # Main build steps
 run_command("pip install -r requirements.txt")
 run_command("python deploy_setup.py")

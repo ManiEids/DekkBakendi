@@ -7,6 +7,8 @@ services:
     envVars:
       - key: PORT
         value: 10000
+      - key: PYTHON_VERSION
+        value: 3.9.12
       - key: DATABASE_URL
         value: postgresql://neondb_owner:npg_lrCXzKNO9A2t@ep-ancient-queen-a2bhzxqa-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require
       - key: PRODUCTION
