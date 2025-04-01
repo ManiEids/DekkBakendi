@@ -6,4 +6,13 @@ __pycache__/
 env/
 venv/
 ENV/
-*.json
+# Only ignore generated JSON files in root directory
+/combined_tire_data.json
+/n1.json
+/nesdekk.json
+/dekkjahollin.json
+/dekkjasalan.json
+/mitra.json
+/klettur.json
+# Don't ignore JSON files in example_data
+!example_data/*.json

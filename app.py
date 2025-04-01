@@ -62,82 +62,134 @@ def run_specific_spider(spider_name):
     spiders_dir = os.path.join(script_dir, 'Leita', 'spiders')
     spider_file = os.path.join(spiders_dir, f"{spider_name}.py")
     
+    # Show path information for debugging
+    scraper_logs.append(f"Looking for spider file: {spider_file}")
+    
+    # List all files in the Leita/spiders directory for debugging
+    if os.path.exists(spiders_dir):
+        files = os.listdir(spiders_dir)
+        scraper_logs.append(f"Files in {spiders_dir}: {', '.join(files)}")
+    else:
+        scraper_logs.append(f"Spider directory doesn't exist: {spiders_dir}")
+    
     # Try to ensure the spider file is available
     if not os.path.exists(spider_file):
         scraper_logs.append(f"Spider file {spider_name}.py not found. Trying to fix...")
         try:
+            # Try the copy_spiders script first
             copy_script = os.path.join(script_dir, "copy_spiders.py")
             if os.path.exists(copy_script):
-                subprocess.run([sys.executable, copy_script], check=False)
+                scraper_logs.append(f"Running {copy_script}...")
+                proc = subprocess.run(
+                    [sys.executable, copy_script],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                scraper_logs.append(f"copy_spiders output: {proc.stdout}")
+                if proc.stderr:
+                    scraper_logs.append(f"copy_spiders error: {proc.stderr}")
         except Exception as e:
             scraper_logs.append(f"Error running copy_spiders.py: {str(e)}")
     
-    # Determine the output file path
+    # Check if we now have the spider file
+    if os.path.exists(spider_file):
+        scraper_logs.append(f"✓ Found spider file: {spider_file}")
+    else:
+        scraper_logs.append(f"✗ Spider file still not found. Will use existing data.")
+    
+    # Create the output file path
     output_file = os.path.join(script_dir, f"{spider_name}.json")
+    scraper_logs.append(f"Output will go to: {output_file}")
     
-    # Try to run with direct runner first
-    direct_runner = os.path.join(script_dir, "run_spider_direct.py")
-    if os.path.exists(direct_runner):
-        scraper_logs.append(f"Running {spider_name} with direct runner...")
-        cmd = [
-            sys.executable,
-            direct_runner,
-            spider_name,
-            output_file
-        ]
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
+    # If we have the spider file, try to run it
+    if os.path.exists(spider_file):
+        # Try direct runner first
+        direct_runner = os.path.join(script_dir, "run_spider_direct.py")
+        if os.path.exists(direct_runner):
+            scraper_logs.append(f"Running spider with direct runner...")
+            cmd = [
+                sys.executable,
+                direct_runner,
+                spider_name,
+                output_file
+            ]
+            
+            try:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+                
+                for line in iter(process.stdout.readline, ''):
+                    scraper_logs.append(line.rstrip())
+                
+                process.stdout.close()
+                process.wait()
+                
+                if process.returncode == 0:
+                    scraper_logs.append(f"✅ Spider {spider_name} completed successfully")
+                    return True
+                else:
+                    scraper_logs.append(f"⚠️ Direct runner failed with code {process.returncode}")
+            except Exception as e:
+                scraper_logs.append(f"⚠️ Error running direct runner: {str(e)}")
         
-        for line in iter(process.stdout.readline, ''):
-            scraper_logs.append(line)
-        
-        process.stdout.close()
-        process.wait()
-        
-        if process.returncode == 0:
-            scraper_logs.append(f"✅ Spider {spider_name} completed successfully")
-            return True
-        else:
-            scraper_logs.append(f"⚠️ Direct runner failed, trying with scrapy command...")
+        # Fall back to scrapy command
+        try:
+            # Change to the Leita directory
+            current_dir = os.getcwd()
+            leita_dir = os.path.join(script_dir, "Leita")
+            os.chdir(leita_dir)
+            scraper_logs.append(f"Changed directory to: {os.getcwd()}")
+            
+            cmd = [
+                'scrapy', 'crawl', 
+                spider_name, 
+                '-O', output_file
+            ]
+            scraper_logs.append(f"Running command: {' '.join(cmd)}")
+            
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            
+            for line in iter(process.stdout.readline, ''):
+                scraper_logs.append(line.rstrip())
+            
+            process.stdout.close()
+            exit_code = process.wait()
+            
+            # Change back to original directory
+            os.chdir(current_dir)
+            
+            if exit_code == 0:
+                scraper_logs.append(f"✅ Spider {spider_name} completed successfully")
+                return True
+            else:
+                scraper_logs.append(f"⚠️ Spider failed with exit code {exit_code}")
+        except Exception as e:
+            scraper_logs.append(f"❌ Error running spider: {str(e)}")
+            try:
+                # Change back to original directory
+                os.chdir(current_dir)
+            except:
+                pass
     
-    # Fall back to scrapy command
-    try:
-        # Change to the Leita directory
-        os.chdir(os.path.join(script_dir, "Leita"))
-        scraper_logs.append(f"Changed directory to: {os.getcwd()}")
-        
-        cmd = [
-            'scrapy', 'crawl', 
-            spider_name, 
-            '-O', output_file
-        ]
-        scraper_logs.append(f"Running command: {' '.join(cmd)}")
-        
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-        
-        for line in iter(process.stdout.readline, ''):
-            scraper_logs.append(line)
-        
-        process.stdout.close()
-        process.wait()
-        
-        if process.returncode == 0:
-            scraper_logs.append(f"✅ Spider {spider_name} completed successfully")
-            return True
-    except Exception as e:
-        scraper_logs.append(f"❌ Error running spider: {str(e)}")
+    # If we get here, check if we already have some data for this spider
+    existing_json = os.path.join(script_dir, f"{spider_name}.json")
+    if os.path.exists(existing_json):
+        scraper_logs.append(f"Using existing data from {existing_json}")
+        return True
     
+    scraper_logs.append(f"No data available for {spider_name}")
     return False
 
 @app.route('/run-spider/<spider_name>')
@@ -180,64 +232,40 @@ def run_scrapers():
     def run_process():
         global is_running, scraper_logs
         try:
-            # First run the environment check to ensure spiders are available
-            env_script = os.path.join(os.path.dirname(__file__), "check_environment.py")
-            if os.path.exists(env_script):
-                scraper_logs.append("Running environment check...")
-                subprocess.run([sys.executable, env_script], check=True)
+            # Run each spider in sequence
+            for spider_name in SPIDERS:
+                scraper_logs.append(f"Starting spider: {spider_name}")
+                success = run_specific_spider(spider_name)
+                if not success:
+                    scraper_logs.append(f"⚠️ Failed to run spider: {spider_name}")
+                    
+            # Try to merge the results if we have at least some data
+            merge_script = os.path.join(os.path.dirname(__file__), "Leita", "merge_tires.py")
+            if os.path.exists(merge_script):
+                scraper_logs.append("Running merge script...")
+                try:
+                    process = subprocess.Popen(
+                        [sys.executable, merge_script],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1
+                    )
+                    
+                    for line in iter(process.stdout.readline, ''):
+                        scraper_logs.append(line.rstrip())
+                    
+                    process.stdout.close()
+                    process.wait()
+                    
+                    if process.returncode == 0:
+                        scraper_logs.append("✅ Merge completed successfully")
+                    else:
+                        scraper_logs.append(f"⚠️ Merge script exited with code {process.returncode}")
+                except Exception as e:
+                    scraper_logs.append(f"❌ Error running merge script: {str(e)}")
             
-            # Copy example data files to ensure at least some data is available
-            copy_example_data()
-            
-            # Look for run_all.py in multiple possible locations
-            possible_paths = [
-                "run_all.py",
-                "Leita/run_all.py",
-                os.path.join(os.path.dirname(__file__), "Leita", "run_all.py")
-            ]
-            
-            run_script = None
-            for path in possible_paths:
-                if os.path.exists(path):
-                    run_script = path
-                    scraper_logs.append(f"Found run_all.py at: {path}")
-                    break
-            
-            if not run_script:
-                scraper_logs.append("Error: run_all.py not found")
-                return
-            
-            # Use a timeout to prevent hanging indefinitely
-            process = subprocess.Popen(
-                [sys.executable, run_script], 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1
-            )
-            
-            # Stream output with a timeout
-            start_time = time.time()
-            max_run_time = 300  # 5 minutes max
-            
-            for line in iter(process.stdout.readline, ''):
-                scraper_logs.append(line)
-                # Check for timeout
-                if time.time() - start_time > max_run_time:
-                    process.terminate()
-                    scraper_logs.append("Process terminated due to timeout (5 minutes)")
-                    break
-            
-            process.stdout.close()
-            
-            # Wait with timeout
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.terminate()
-                scraper_logs.append("Process terminated while waiting for completion")
-            
-            scraper_logs.append("Scraper process completed or terminated")
+            scraper_logs.append("All scrapers completed")
             
         except Exception as e:
             scraper_logs.append(f"Error running scrapers: {str(e)}")
@@ -246,21 +274,6 @@ def run_scrapers():
     
     threading.Thread(target=run_process).start()
     return jsonify({"status": "success", "message": "Scrapers started"})
-
-def copy_example_data():
-    """Copy example data files to ensure some data is always available"""
-    try:
-        example_dir = os.path.join(os.path.dirname(__file__), "example_data")
-        if os.path.exists(example_dir):
-            for file in os.listdir(example_dir):
-                if file.endswith(".json"):
-                    src = os.path.join(example_dir, file)
-                    dst = os.path.join(os.path.dirname(__file__), file)
-                    import shutil
-                    shutil.copy2(src, dst)
-                    scraper_logs.append(f"Copied example data: {file}")
-    except Exception as e:
-        scraper_logs.append(f"Error copying example data: {str(e)}")
 
 @app.route('/logs')
 def get_logs():
@@ -316,7 +329,6 @@ def get_data(filename):
         possible_paths = [
             os.path.join(os.path.dirname(__file__), filename),  # Root directory
             os.path.join(os.path.dirname(__file__), 'Leita', filename),  # Leita subdirectory
-            os.path.join(os.path.dirname(__file__), 'example_data', filename)  # Example data directory
         ]
         
         for path in possible_paths:
@@ -324,11 +336,6 @@ def get_data(filename):
                 print(f"Found file at {path}")
                 # For larger files, it's more efficient to send the file directly
                 return send_file(path, mimetype='application/json')
-        
-        # If we have example data for this file, return that instead
-        example_file = os.path.join(os.path.dirname(__file__), 'example_data', filename)
-        if os.path.exists(example_file):
-            return send_file(example_file, mimetype='application/json')
             
         return jsonify({"error": "File not found"}), 404
     except Exception as e:
