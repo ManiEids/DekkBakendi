@@ -160,12 +160,15 @@
         
         // Run all spiders
         runAllButton.addEventListener('click', async () => {
+            console.log("Run All button clicked");
+            logContainer.innerHTML += "<div>🔄 Attempting to run all spiders...</div>";
             try {
                 disableAllButtons(true);
                 statusAllText.textContent = "Starting all scrapers...";
                 
                 const response = await fetch('/run-scrapers');
                 const data = await response.json();
+                logContainer.innerHTML += `<div>👉 Server response: ${JSON.stringify(data)}</div>`;
                 
                 if (response.ok) {
                     statusAllText.textContent = "All scrapers running...";
@@ -175,6 +178,8 @@
                     disableAllButtons(false);
                 }
             } catch (error) {
+                console.error("Error:", error);
+                logContainer.innerHTML += `<div>❌ Error: ${error.message}</div>`;
                 statusAllText.textContent = `Error: ${error.message}`;
                 disableAllButtons(false);
             }
@@ -200,6 +205,8 @@
         spiderButtons.forEach(button => {
             button.addEventListener('click', async () => {
                 const spiderName = button.getAttribute('data-spider');
+                console.log(`Run ${spiderName} button clicked");
+                logContainer.innerHTML += `<div>🔄 Attempting to run ${spiderName}...</div>`;
                 try {
                     disableAllButtons(true);
                     statusSingleText.textContent = `Running ${spiderName}...`;
@@ -218,6 +225,8 @@
                         disableAllButtons(false);
                     }
                 } catch (error) {
+                    console.error("Error:", error);
+                    logContainer.innerHTML += `<div>❌ Error: ${error.message}</div>`;
                     statusSingleText.textContent = `Error: ${error.message}`;
                     disableAllButtons(false);
                 }
@@ -226,6 +235,8 @@
         
         // Database update button
         updateDatabaseButton.addEventListener('click', async () => {
+            console.log("Update database button clicked");
+            logContainer.innerHTML += "<div>🔄 Attempting to update database...</div>";
             try {
                 dbStatus.textContent = "Updating database...";
                 
@@ -238,6 +249,8 @@
                     dbStatus.textContent = `Error: ${data.message}`;
                 }
             } catch (error) {
+                console.error("Error:", error);
+                logContainer.innerHTML += `<div>❌ Error: ${error.message}</div>`;
                 dbStatus.textContent = `Error: ${error.message}`;
             }
         });
@@ -277,57 +290,85 @@
             }
         }
         
-        // Set up event source for logs
-        const eventSource = new EventSource('/logs');
+        // Modify event source to handle connection issues better
+        let eventSourceRetries = 0;
+        let maxRetries = 3;
         
-        eventSource.onmessage = function(event) {
-            const data = JSON.parse(event.data);
+        function setupEventSource() {
+            const eventSource = new EventSource('/logs');
+            logContainer.innerHTML += "<div>🔌 Connecting to log stream...</div>";
             
-            // Update timestamps
-            updateTimestamps(data.timestamps);
+            eventSource.onopen = function() {
+                logContainer.innerHTML += "<div>✅ Connected to log stream</div>";
+                eventSourceRetries = 0;
+            };
             
-            // Highlight the spider file that's currently being processed
-            if (data.running_spider) {
-                if (data.running_spider === "all") {
-                    // All spiders are running
-                    // Don't highlight any specific one
-                } else if (data.running_spider === "merging") {
-                    // Highlight the combined data file
-                    highlightFileItem("combined_tire_data.json", true);
-                } else {
-                    // Highlight the specific spider file
-                    highlightFileItem(`${data.running_spider}.json`, true);
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                // Update timestamps
+                updateTimestamps(data.timestamps);
+                
+                // Highlight the spider file that's currently being processed
+                if (data.running_spider) {
+                    if (data.running_spider === "all") {
+                        // All spiders are running
+                        // Don't highlight any specific one
+                    } else if (data.running_spider === "merging") {
+                        // Highlight the combined data file
+                        highlightFileItem("combined_tire_data.json", true);
+                    } else {
+                        // Highlight the specific spider file
+                        highlightFileItem(`${data.running_spider}.json`, true);
+                    }
                 }
-            }
-            
-            if (data.logs && data.logs.length > 0) {
-                data.logs.forEach(log => {
-                    const logLine = document.createElement('div');
-                    logLine.textContent = log;
-                    logContainer.appendChild(logLine);
-                });
                 
-                // Auto-scroll to bottom
-                logContainer.scrollTop = logContainer.scrollHeight;
-            }
-            
-            if (data.running === false) {
-                statusAllText.textContent = "Ready to run all scrapers";
-                statusSingleText.textContent = "Select a spider to run";
-                disableAllButtons(false);
-                cancelButton.style.display = "none";
+                if (data.logs && data.logs.length > 0) {
+                    data.logs.forEach(log => {
+                        const logLine = document.createElement('div');
+                        logLine.textContent = log;
+                        logContainer.appendChild(logLine);
+                    });
+                    
+                    // Auto-scroll to bottom
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
                 
-                // Remove all highlights when processing is complete
-                document.querySelectorAll('.file-item').forEach(item => {
-                    item.classList.remove('updating');
-                });
-            }
-        };
+                if (data.running === false) {
+                    statusAllText.textContent = "Ready to run all scrapers";
+                    statusSingleText.textContent = "Select a spider to run";
+                    disableAllButtons(false);
+                    cancelButton.style.display = "none";
+                    
+                    // Remove all highlights when processing is complete
+                    document.querySelectorAll('.file-item').forEach(item => {
+                        item.classList.remove('updating');
+                    });
+                }
+            };
+            
+            eventSource.onerror = function(err) {
+                console.error("EventSource error:", err);
+                logContainer.innerHTML += "<div>❌ Log stream connection error</div>";
+                
+                eventSource.close();
+                eventSourceRetries++;
+                
+                if (eventSourceRetries <= maxRetries) {
+                    logContainer.innerHTML += `<div>🔄 Retrying connection (${eventSourceRetries}/${maxRetries})...</div>`;
+                    setTimeout(setupEventSource, 3000);
+                } else {
+                    statusAllText.textContent = "Connection lost. Please refresh the page.";
+                    statusSingleText.textContent = "Connection lost. Please refresh the page.";
+                    logContainer.innerHTML += "<div>❌ Maximum retries reached. Please refresh the page.</div>";
+                }
+            };
+            
+            return eventSource;
+        }
         
-        eventSource.onerror = function() {
-            statusAllText.textContent = "Connection lost. Please refresh the page.";
-            statusSingleText.textContent = "Connection lost. Please refresh the page.";
-        };
+        // Initialize event source
+        const eventSource = setupEventSource();
     </script>
 </body>
 </html>
