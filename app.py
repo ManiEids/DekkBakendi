@@ -4,6 +4,7 @@ import subprocess
 import threading
 import time
 import sys
+import datetime
 from pathlib import Path
 from flask import Flask, jsonify, render_template, Response, stream_with_context, send_file
 from dotenv import load_dotenv
@@ -23,6 +24,7 @@ app = Flask(__name__, static_folder='static')
 # Store logs for display
 scraper_logs = []
 is_running = False
+running_spider = None
 
 # List of available spiders
 SPIDERS = [
@@ -33,6 +35,9 @@ SPIDERS = [
     "nesdekk", 
     "dekkjasalan"
 ]
+
+# Store file timestamps
+file_timestamps = {}
 
 # Database connection placeholder - will be implemented later
 db_connection = None
@@ -46,16 +51,33 @@ def init_db_connection():
         from sqlalchemy import create_engine
         db_connection = create_engine(db_url)
 
+def update_file_timestamps():
+    """Update the timestamps of all known data files"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    files_to_check = ['combined_tire_data.json'] + [f"{spider}.json" for spider in SPIDERS]
+    
+    for filename in files_to_check:
+        filepath = os.path.join(script_dir, filename)
+        if os.path.exists(filepath):
+            timestamp = datetime.datetime.fromtimestamp(os.path.getmtime(filepath))
+            file_timestamps[filename] = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            file_timestamps[filename] = "Not available"
+
 @app.route('/')
 def index():
-    return render_template('index.html', spiders=SPIDERS)
+    update_file_timestamps()
+    return render_template('index.html', spiders=SPIDERS, timestamps=file_timestamps, running_spider=running_spider)
 
 @app.route('/healthz')
 def health_check():
     return jsonify({"status": "healthy"}), 200
 
 def run_specific_spider(spider_name):
-    global scraper_logs
+    global scraper_logs, running_spider
+    
+    # Record which spider is currently running
+    running_spider = spider_name
     
     # First check if the spider file exists
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -132,6 +154,8 @@ def run_specific_spider(spider_name):
                 
                 if process.returncode == 0:
                     scraper_logs.append(f"✅ Spider {spider_name} completed successfully")
+                    # Update timestamps after successful run
+                    update_file_timestamps()
                     return True
                 else:
                     scraper_logs.append(f"⚠️ Direct runner failed with code {process.returncode}")
@@ -172,6 +196,8 @@ def run_specific_spider(spider_name):
             
             if exit_code == 0:
                 scraper_logs.append(f"✅ Spider {spider_name} completed successfully")
+                # Update timestamps after successful run
+                update_file_timestamps()
                 return True
             else:
                 scraper_logs.append(f"⚠️ Spider failed with exit code {exit_code}")
@@ -187,6 +213,8 @@ def run_specific_spider(spider_name):
     existing_json = os.path.join(script_dir, f"{spider_name}.json")
     if os.path.exists(existing_json):
         scraper_logs.append(f"Using existing data from {existing_json}")
+        # Even when using existing data, update the timestamp information
+        update_file_timestamps()
         return True
     
     scraper_logs.append(f"No data available for {spider_name}")
@@ -194,7 +222,7 @@ def run_specific_spider(spider_name):
 
 @app.route('/run-spider/<spider_name>')
 def run_spider(spider_name):
-    global is_running, scraper_logs
+    global is_running, scraper_logs, running_spider
     
     if is_running:
         return jsonify({"status": "error", "message": "A spider is already running"}), 400
@@ -205,21 +233,23 @@ def run_spider(spider_name):
     # Clear previous logs
     scraper_logs = []
     is_running = True
+    running_spider = spider_name  # Set the currently running spider
     
     def run_process():
-        global is_running
+        global is_running, running_spider
         try:
             scraper_logs.append(f"Starting spider: {spider_name}")
             run_specific_spider(spider_name)
         finally:
             is_running = False
+            running_spider = None  # Clear running spider when done
     
     threading.Thread(target=run_process).start()
     return jsonify({"status": "success", "message": f"Spider {spider_name} started"})
 
 @app.route('/run-scrapers')
 def run_scrapers():
-    global is_running, scraper_logs
+    global is_running, scraper_logs, running_spider
     
     if is_running:
         return jsonify({"status": "error", "message": "Scrapers already running"}), 400
@@ -227,19 +257,22 @@ def run_scrapers():
     # Clear previous logs
     scraper_logs = []
     is_running = True
+    running_spider = "all"  # Indicate that all spiders are running
     
     # Run the scrapers in a separate thread
     def run_process():
-        global is_running, scraper_logs
+        global is_running, scraper_logs, running_spider
         try:
             # Run each spider in sequence
             for spider_name in SPIDERS:
+                running_spider = spider_name  # Update which spider is currently running
                 scraper_logs.append(f"Starting spider: {spider_name}")
                 success = run_specific_spider(spider_name)
                 if not success:
                     scraper_logs.append(f"⚠️ Failed to run spider: {spider_name}")
                     
             # Try to merge the results if we have at least some data
+            running_spider = "merging"  # Show that we're in the merging phase
             merge_script = os.path.join(os.path.dirname(__file__), "Leita", "merge_tires.py")
             if os.path.exists(merge_script):
                 scraper_logs.append("Running merge script...")
@@ -260,6 +293,8 @@ def run_scrapers():
                     
                     if process.returncode == 0:
                         scraper_logs.append("✅ Merge completed successfully")
+                        # Update timestamps after successful merge
+                        update_file_timestamps()
                     else:
                         scraper_logs.append(f"⚠️ Merge script exited with code {process.returncode}")
                 except Exception as e:
@@ -271,6 +306,7 @@ def run_scrapers():
             scraper_logs.append(f"Error running scrapers: {str(e)}")
         finally:
             is_running = False
+            running_spider = None
     
     threading.Thread(target=run_process).start()
     return jsonify({"status": "success", "message": "Scrapers started"})
@@ -278,15 +314,18 @@ def run_scrapers():
 @app.route('/logs')
 def get_logs():
     def generate():
-        global scraper_logs, is_running
+        global scraper_logs, is_running, running_spider
         
         # Keep track of the last position in the logs we've sent
         last_sent_index = 0
         
-        # Send initial data
+        # Send initial data including timestamps and running status
+        update_file_timestamps()
         yield "data: " + json.dumps({
             "logs": scraper_logs, 
-            "running": is_running
+            "running": is_running,
+            "timestamps": file_timestamps,
+            "running_spider": running_spider
         }) + "\n\n"
         
         # Send updates every 5 seconds
@@ -298,15 +337,24 @@ def get_logs():
             if len(scraper_logs) > last_sent_index:
                 new_logs = scraper_logs[last_sent_index:]
                 last_sent_index = len(scraper_logs)
+                
+                # Update timestamps before sending
+                update_file_timestamps()
+                
                 yield "data: " + json.dumps({
                     "logs": new_logs, 
-                    "running": is_running
+                    "running": is_running,
+                    "timestamps": file_timestamps,
+                    "running_spider": running_spider
                 }) + "\n\n"
             else:
-                # Send a heartbeat even if no new logs
+                # Send a heartbeat even if no new logs, with updated timestamps
+                update_file_timestamps()
                 yield "data: " + json.dumps({
                     "logs": [], 
                     "running": is_running,
+                    "timestamps": file_timestamps,
+                    "running_spider": running_spider,
                     "heartbeat": True
                 }) + "\n\n"
     
@@ -334,6 +382,8 @@ def get_data(filename):
         for path in possible_paths:
             if os.path.exists(path):
                 print(f"Found file at {path}")
+                # Update the timestamp before serving the file
+                update_file_timestamps()
                 # For larger files, it's more efficient to send the file directly
                 return send_file(path, mimetype='application/json')
             
