@@ -35,13 +35,13 @@ spiders = [
 def delete_old_jsons():
     print("🔄 Cleaning up old JSON files...")
     for spider in spiders:
-        json_path = Path(f"{spider}.json")
-        if json_path.exists():
-            json_path.unlink()
+        json_path = os.path.join(PROJECT_ROOT, f"{spider}.json")
+        if os.path.exists(json_path):
+            os.unlink(json_path)
             print(f"🗑️ Deleted: {json_path}")
-    output_json = Path("combined_tire_data.json")
-    if output_json.exists():
-        output_json.unlink()
+    output_json = os.path.join(PROJECT_ROOT, "combined_tire_data.json")
+    if os.path.exists(output_json):
+        os.unlink(output_json)
         print(f"🗑️ Deleted: {output_json}")
 
 def run_spider_with_direct_runner(spider_name):
@@ -87,7 +87,7 @@ def run_spider_with_direct_runner(spider_name):
 def run_spider(spider_name):
     """Try multiple methods to run a spider"""
     # First check if the spider file exists
-    spider_file = os.path.join(PROJECT_ROOT, 'Leita', 'spiders', f"{spider_name}.py")
+    spider_file = os.path.join(BASE_DIR, 'spiders', f"{spider_name}.py")
     if not os.path.exists(spider_file):
         print(f"❌ Spider file doesn't exist: {spider_file}")
         print("    Trying to fix by running copy_spiders.py...")
@@ -107,7 +107,7 @@ def run_spider(spider_name):
     print(f"🕷️ Running spider via scrapy command: {spider_name}")
     
     # Change to Leita directory to ensure scrapy can find the spiders
-    os.chdir(os.path.join(PROJECT_ROOT, "Leita"))
+    os.chdir(BASE_DIR)
     print(f"Changed directory to: {os.getcwd()}")
     
     # Try direct scrapy command with just the spider name
@@ -136,32 +136,6 @@ def run_spider(spider_name):
     if exit_code == 0:
         print(f"✅ Finished spider: {spider_name}")
         return True
-    
-    # Last resort - try with explicit module path
-    cmd = [
-        'python', '-m', 'scrapy', 'crawl', 
-        spider_name, 
-        '-O', os.path.join(PROJECT_ROOT, f"{spider_name}.json"),
-    ]
-    print(f"Trying final command: {' '.join(cmd)}")
-    
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1
-    )
-    
-    for line in iter(process.stdout.readline, ''):
-        print(line, end='', flush=True)
-    
-    process.stdout.close()
-    exit_code = process.wait()
-    
-    if exit_code == 0:
-        print(f"✅ Finished spider: {spider_name}")
-        return True
     else:
         print(f"❌ Failed spider: {spider_name} with all methods")
         return False
@@ -170,60 +144,74 @@ def merge_json_files():
     """Merge all JSON files into one combined file."""
     print("\n📦 All spiders finished. Running merge script...")
     
-    # List all the tire data files
-    json_files = glob.glob("*.json")
-    if not json_files:
-        print("❌ No JSON files found to merge.")
-        return False
+    # Use the dedicated merge_tires.py script if it exists
+    merge_script = os.path.join(BASE_DIR, "merge_tires.py")
+    if os.path.exists(merge_script):
+        print(f"Running merge script: {merge_script}")
+        process = subprocess.run(
+            [sys.executable, merge_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+        print(process.stdout)
+        if process.returncode == 0:
+            print("✅ Merge completed successfully using merge_tires.py")
+            return True
+        else:
+            print(f"❌ Merge failed with return code {process.returncode}")
     
+    # Fallback to manual merging
+    print("Performing manual merge...")
     combined_data = []
     
     # Read and combine each file
-    for file_path in json_files:
-        if file_path == "combined_tire_data.json":
+    for spider in spiders:
+        file_path = os.path.join(PROJECT_ROOT, f"{spider}.json")
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
             continue
-        
+            
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
-                # If it's a list, extend combined_data
                 if isinstance(data, list):
+                    # Add seller information
+                    for item in data:
+                        item['seller'] = spider.capitalize()
                     combined_data.extend(data)
-                # If it's a dict, append it
-                elif isinstance(data, dict):
-                    combined_data.append(data)
-                
-                print(f"  ✓ Processed {file_path} ({len(data) if isinstance(data, list) else 1} items)")
+                    print(f"  ✓ Added {len(data)} items from {spider}")
+                else:
+                    print(f"  ✗ Invalid data format in {file_path}")
         except Exception as e:
             print(f"  ✗ Error processing {file_path}: {str(e)}")
     
-    # Write the combined data to a new file
+    # Write the combined data to a file
     if combined_data:
-        with open("combined_tire_data.json", 'w', encoding='utf-8') as outfile:
+        output_file = os.path.join(PROJECT_ROOT, "combined_tire_data.json")
+        with open(output_file, 'w', encoding='utf-8') as outfile:
             json.dump(combined_data, outfile, indent=2, ensure_ascii=False)
-        print(f"✅ Successfully combined all tire data into combined_tire_data.json")
-        print(f"✅ Merge completed successfully. Ready to query.")
+        print(f"✅ Successfully combined {len(combined_data)} items into {output_file}")
         return True
     else:
-        print("❌ No data found to merge.")
+        print("❌ No data to combine")
         return False
 
 if __name__ == "__main__":
+    # Clean up old files first
     delete_old_jsons()
 
-    print("\n🚀 Running all spiders sequentially (one at a time)...")
+    print("\n🚀 Running all spiders sequentially...")
     for spider in spiders:
         success = run_spider(spider)
         if not success:
             print(f"Warning: Spider {spider} failed or was skipped.")
-        else:
-            # Process one successful spider at a time to avoid memory issues
-            print(f"\n📦 Processing {spider} data...")
-            with open(f"{spider}.json", 'r', encoding='utf-8') as f:
-                try:
-                    data = json.load(f)
-                    print(f"  ✓ {spider}.json contains {len(data) if isinstance(data, list) else 1} items")
-                except json.JSONDecodeError:
-                    print(f"  ✗ {spider}.json contains invalid JSON")
-
+    
+    # Merge results
     merge_json_files()
+    
+    # Now run database update if script exists
+    db_update_script = os.path.join(PROJECT_ROOT, "database_update.py")
+    if os.path.exists(db_update_script):
+        print("\n🔄 Updating database...")
+        subprocess.run([sys.executable, db_update_script])

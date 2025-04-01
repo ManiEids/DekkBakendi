@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-"""
-Creates test data files for the Tire Scraper Dashboard.
-"""
 import os
 import json
 from datetime import datetime

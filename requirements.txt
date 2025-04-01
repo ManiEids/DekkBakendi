@@ -4,4 +4,8 @@ gunicorn==21.2.0
 psycopg2-binary==2.9.6
 SQLAlchemy==2.0.15
 python-dotenv==1.0.0
+requests==2.32.3
+urllib3<3.0.0
+itemadapter==0.8.0
+Twisted==22.10.0
 # Add any other dependencies your project needs here
