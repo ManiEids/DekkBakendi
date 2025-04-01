@@ -49,8 +49,26 @@ def run_scrapers():
     def run_process():
         global is_running, scraper_logs
         try:
+            # Look for run_all.py in multiple possible locations
+            possible_paths = [
+                "run_all.py",
+                "Leita/run_all.py",
+                os.path.join(os.path.dirname(__file__), "Leita", "run_all.py")
+            ]
+            
+            run_script = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    run_script = path
+                    scraper_logs.append(f"Found run_all.py at: {path}")
+                    break
+            
+            if not run_script:
+                scraper_logs.append("Error: run_all.py not found")
+                return
+            
             process = subprocess.Popen(
-                ['python', 'run_all.py'], 
+                ['python', run_script], 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.STDOUT,
                 text=True,
