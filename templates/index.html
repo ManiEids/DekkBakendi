@@ -56,12 +56,21 @@
             margin-top: 20px;
         }
         .file-item {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .file-item.updating {
+            background-color: #fff8e1;
+            border-color: #ffd54f;
         }
         .file-link {
             color: #0066cc;
             font-weight: bold;
             text-decoration: none;
+            font-size: 16px;
         }
         .file-link:hover {
             text-decoration: underline;
@@ -69,8 +78,12 @@
         .timestamp {
             display: block;
             color: #666;
-            font-size: 0.85em;
-            margin-top: 3px;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .timestamp::before {
+            content: "Last updated: ";
+            font-weight: bold;
         }
         .status {
             margin-top: 10px;
@@ -110,19 +123,25 @@
         <p id="statusSingle" class="status">Select a spider to run</p>
     </div>
     
+    <div class="section">
+        <h2>Database Integration</h2>
+        <button id="updateDatabaseButton" class="button">Update Database from JSON</button>
+        <p id="dbStatus" class="status">Ready to update database</p>
+    </div>
+    
     <h2>Log Output:</h2>
     <div id="log-container"></div>
     
     <div class="data-links">
         <h2>Data Files:</h2>
         
-        <div class="file-item">
+        <div class="file-item" id="file-combined_tire_data.json">
             <a href="/data/combined_tire_data.json" target="_blank" class="file-link">Combined Data</a>
             <span class="timestamp" id="timestamp-combined_tire_data.json">{{ timestamps.get('combined_tire_data.json', 'Not available') }}</span>
         </div>
         
         {% for spider in spiders %}
-        <div class="file-item">
+        <div class="file-item" id="file-{{ spider }}.json">
             <a href="/data/{{ spider }}.json" target="_blank" class="file-link">{{ spider }}</a>
             <span class="timestamp" id="timestamp-{{ spider }}.json">{{ timestamps.get(spider + '.json', 'Not available') }}</span>
         </div>
@@ -136,6 +155,8 @@
         const statusAllText = document.getElementById('statusAll');
         const statusSingleText = document.getElementById('statusSingle');
         const spiderButtons = document.querySelectorAll('.spider-button');
+        const updateDatabaseButton = document.getElementById('updateDatabaseButton');
+        const dbStatus = document.getElementById('dbStatus');
         
         // Run all spiders
         runAllButton.addEventListener('click', async () => {
@@ -189,6 +210,9 @@
                     if (response.ok) {
                         statusSingleText.textContent = `${spiderName} running...`;
                         cancelButton.style.display = "block";
+                        
+                        // Highlight the file item that's being updated
+                        highlightFileItem(`${spiderName}.json`, true);
                     } else {
                         statusSingleText.textContent = `Error: ${data.message}`;
                         disableAllButtons(false);
@@ -200,12 +224,42 @@
             });
         });
         
+        // Database update button
+        updateDatabaseButton.addEventListener('click', async () => {
+            try {
+                dbStatus.textContent = "Updating database...";
+                
+                const response = await fetch('/update-database');
+                const data = await response.json();
+                
+                if (data.status === "success") {
+                    dbStatus.textContent = data.message;
+                } else {
+                    dbStatus.textContent = `Error: ${data.message}`;
+                }
+            } catch (error) {
+                dbStatus.textContent = `Error: ${error.message}`;
+            }
+        });
+        
         // Helper function to disable/enable all buttons
         function disableAllButtons(disabled) {
             runAllButton.disabled = disabled;
             spiderButtons.forEach(button => {
                 button.disabled = disabled;
             });
+        }
+        
+        // Highlight the file item being updated
+        function highlightFileItem(filename, isUpdating) {
+            const fileItem = document.getElementById(`file-${filename}`);
+            if (fileItem) {
+                if (isUpdating) {
+                    fileItem.classList.add('updating');
+                } else {
+                    fileItem.classList.remove('updating');
+                }
+            }
         }
         
         // Update timestamps
@@ -215,6 +269,9 @@
                     const timestampElement = document.getElementById(`timestamp-${filename}`);
                     if (timestampElement) {
                         timestampElement.textContent = timestamp;
+                        
+                        // Remove highlighting after timestamp is updated
+                        highlightFileItem(filename, false);
                     }
                 }
             }
@@ -228,6 +285,20 @@
             
             // Update timestamps
             updateTimestamps(data.timestamps);
+            
+            // Highlight the spider file that's currently being processed
+            if (data.running_spider) {
+                if (data.running_spider === "all") {
+                    // All spiders are running
+                    // Don't highlight any specific one
+                } else if (data.running_spider === "merging") {
+                    // Highlight the combined data file
+                    highlightFileItem("combined_tire_data.json", true);
+                } else {
+                    // Highlight the specific spider file
+                    highlightFileItem(`${data.running_spider}.json`, true);
+                }
+            }
             
             if (data.logs && data.logs.length > 0) {
                 data.logs.forEach(log => {
@@ -245,6 +316,11 @@
                 statusSingleText.textContent = "Select a spider to run";
                 disableAllButtons(false);
                 cancelButton.style.display = "none";
+                
+                // Remove all highlights when processing is complete
+                document.querySelectorAll('.file-item').forEach(item => {
+                    item.classList.remove('updating');
+                });
             }
         };
         

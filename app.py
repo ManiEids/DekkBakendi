@@ -166,6 +166,13 @@ def run_specific_spider(spider_name):
                 for line in iter(process.stdout.readline, ''):
                     scraper_logs.append(line.rstrip())
                     
+                    # Add additional check for completion indicators
+                    if "Dumping" in line or "dumping" in line or "items scraped" in line:
+                        scraper_logs.append(f"✅ Spider {spider_name} appears to be completing its run")
+                    # Log telnet console errors but don't treat them as failures
+                    if "AlreadyNegotiating" in line:
+                        scraper_logs.append("ℹ️ Telnet console warning (safe to ignore)")
+                    
                     # Check for timeout
                     current_time = time.time()
                     if current_time - start_time > SPIDER_TIMEOUT:
@@ -476,6 +483,30 @@ def db_status():
         return jsonify({"status": "connected"})
     else:
         return jsonify({"status": "not connected", "message": "Database connection not initialized"}), 503
+
+@app.route('/update-database')
+def update_database():
+    """Update Neon database with the latest tire data"""
+    try:
+        from database import TireDatabase
+        
+        # Create new database connection
+        db = TireDatabase()
+        
+        # Test connection and import data
+        success, message = db.import_from_json()
+        
+        if success:
+            return jsonify({"status": "success", "message": message})
+        else:
+            return jsonify({"status": "error", "message": message}), 500
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error", 
+            "message": f"Database error: {str(e)}",
+            "traceback": traceback.format_exc()
+        }), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

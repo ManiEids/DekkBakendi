@@ -9,6 +9,13 @@ class NesdekkSpider(scrapy.Spider):
         "https://nesdekk.is/dekkjaleit/?tyre-filter=1"
     ]
     
+    custom_settings = {
+        'TELNETCONSOLE_ENABLED': False,
+        'DOWNLOAD_TIMEOUT': 30,
+        'DOWNLOAD_DELAY': 1.0,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
+    }
+    
     def parse(self, response):
         # Loop over each product in the page.
         for product in response.css("li.product"):

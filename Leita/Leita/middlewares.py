@@ -4,6 +4,9 @@
 # https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
 from scrapy import signals
+from scrapy.exceptions import NotConfigured
+from twisted.internet import reactor
+from twisted.internet.error import ConnectionDone
 
 # useful for handling different item types with a single interface
 from itemadapter import is_item, ItemAdapter
@@ -101,3 +104,22 @@ class LeitaDownloaderMiddleware:
 
     def spider_opened(self, spider):
         spider.logger.info("Spider opened: %s" % spider.name)
+
+
+class TelnetConsoleFixMiddleware:
+    """
+    A middleware that disables the telnet console to prevent connection errors.
+    """
+    @classmethod
+    def from_crawler(cls, crawler):
+        if not crawler.settings.getbool('TELNETCONSOLE_ENABLED', True):
+            # Middleware not needed if telnet is already disabled
+            raise NotConfigured
+            
+        # Disable telnet console to prevent connection errors
+        crawler.settings.set('TELNETCONSOLE_ENABLED', False)
+        return cls()
+
+    def process_spider_input(self, response, spider):
+        # Do nothing, just allow other middlewares and the spider to process the response
+        return None

@@ -31,3 +31,13 @@ AUTOTHROTTLE_ENABLED = True
 AUTOTHROTTLE_START_DELAY = 3.0
 AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
 CONCURRENT_REQUESTS_PER_DOMAIN = 2
+
+# Enable spider middlewares to handle telnet console errors
+SPIDER_MIDDLEWARES = {
+    'Leita.middlewares.TelnetConsoleFixMiddleware': 100,
+}
+
+# Explicitly disable telnet console in multiple places to make sure it's off
+EXTENSIONS = {
+    'scrapy.extensions.telnet.TelnetConsole': None,
+}

@@ -40,6 +40,13 @@ def is_in_stock(product):
 class N1FullCatalogueSpider(scrapy.Spider):
     name = "n1"
     allowed_domains = ["backend.n1.is"]
+    
+    custom_settings = {
+        'TELNETCONSOLE_ENABLED': False,
+        'DOWNLOAD_TIMEOUT': 30,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
+        'ROBOTSTXT_OBEY': False,
+    }
 
     def start_requests(self):
         # To get the full catalogue, we remove attribute filters.

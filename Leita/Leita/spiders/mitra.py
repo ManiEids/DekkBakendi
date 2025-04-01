@@ -11,23 +11,32 @@ class MitraTiresSpider(scrapy.Spider):
         'DEFAULT_REQUEST_HEADERS': {
             'Accept': 'application/json, text/plain, */*',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-        }
+        },
+        'TELNETCONSOLE_ENABLED': False,  # Disable telnet console to prevent errors
+        'DOWNLOAD_DELAY': 1.0,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
+        'DOWNLOAD_TIMEOUT': 30,
+        'CLOSESPIDER_TIMEOUT': 180,  # 3 minutes max
     }
 
     def __init__(self, *args, **kwargs):
         super(MitraTiresSpider, self).__init__(*args, **kwargs)
         self.seen_ids = set()
+        self.items_count = 0
+        self.page_count = 0
 
     def parse(self, response):
-        self.logger.info("Response URL: " + response.url)
+        self.page_count += 1
+        self.logger.info(f"Processing page {self.page_count}: {response.url}")
+        
         try:
             data = json.loads(response.text)
         except Exception as e:
-            self.logger.error("Error parsing JSON: " + str(e))
+            self.logger.error(f"Error parsing JSON: {str(e)}")
             return
 
         if not data:
-            self.logger.info("No data returned. Stopping pagination.")
+            self.logger.info(f"No data returned on page {self.page_count}. Stopping pagination.")
             return
 
         new_items_count = 0
@@ -66,8 +75,9 @@ class MitraTiresSpider(scrapy.Spider):
                 "stock": "in stock" if inventory > 0 else "out of stock",
             }
             new_items_count += 1
+            self.items_count += 1
 
-        self.logger.info(f"Yielded {new_items_count} new items from this page.")
+        self.logger.info(f"Found {new_items_count} new items on page {self.page_count} (total: {self.items_count})")
 
         # If no new items were found on this page, assume duplicates and stop.
         if new_items_count == 0:
@@ -79,6 +89,12 @@ class MitraTiresSpider(scrapy.Spider):
         qs = parse_qs(parsed.query)
         current_page = int(qs.get("page", ["1"])[0])
         next_page = current_page + 1
+        
+        # Limit to 10 pages to prevent overloading
+        if next_page > 10:
+            self.logger.info("Reached max page limit (10), stopping pagination.")
+            return
+            
         qs["page"] = [str(next_page)]
         new_query = urlencode(qs, doseq=True)
         next_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))

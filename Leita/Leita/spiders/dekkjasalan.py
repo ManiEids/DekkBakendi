@@ -10,6 +10,10 @@ class DekkjasalanSpider(scrapy.Spider):
     ]
     
     custom_settings = {
+        'TELNETCONSOLE_ENABLED': False,
+        'DOWNLOAD_TIMEOUT': 30,
+        'DOWNLOAD_DELAY': 1.0,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
         'DEFAULT_REQUEST_HEADERS': {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',

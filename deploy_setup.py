@@ -1,44 +1,60 @@
 #!/usr/bin/env python
+"""
+Setup script for deployment - ensures proper environment configuration.
+"""
 import os
-import shutil
 import sys
+import subprocess
+from pathlib import Path
 
-def deploy_setup():
-    """Prepares the project for deployment by ensuring all spider files are in the correct location"""
-    print("Setting up deployment...")
+def main():
+    """Make sure the environment is properly set up for deployment."""
+    print("Running deployment setup...")
     
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    target_dir = os.path.join(base_dir, "Leita", "spiders")
-    os.makedirs(target_dir, exist_ok=True)
+    # Get the project directory
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    print(f"Project directory: {project_dir}")
     
-    # Initialize empty __init__.py files
-    init_file = os.path.join(target_dir, "__init__.py")
-    if not os.path.exists(init_file):
-        with open(init_file, "w") as f:
-            f.write("# Spider package initialization file\n")
-    
-    # List of included spider files
-    included_spiders = [
-        os.path.join(base_dir, "Leita", "Leita", "spiders", "dekkjahollin.py"),
-        os.path.join(base_dir, "Leita", "Leita", "spiders", "klettur.py"),
-        os.path.join(base_dir, "Leita", "Leita", "spiders", "mitra.py"),
-        os.path.join(base_dir, "Leita", "Leita", "spiders", "n1.py"),
-        os.path.join(base_dir, "Leita", "Leita", "spiders", "nesdekk.py"),
-        os.path.join(base_dir, "Leita", "Leita", "spiders", "dekkjasalan.py"),
+    # Create necessary directory structure
+    directories = [
+        os.path.join(project_dir, "Leita"),
+        os.path.join(project_dir, "Leita", "spiders")
     ]
     
-    # Manually bundle the spiders
-    print("Copying spider files to deployment directory:")
-    for path in included_spiders:
-        if os.path.exists(path):
-            filename = os.path.basename(path)
-            dest = os.path.join(target_dir, filename)
-            print(f"  Copying {path} -> {dest}")
-            shutil.copy2(path, dest)
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+        print(f"Ensured directory exists: {directory}")
     
-    print("Deployment setup complete!")
-    return True
+    # Create required __init__.py files
+    init_files = [
+        os.path.join(project_dir, "Leita", "__init__.py"),
+        os.path.join(project_dir, "Leita", "spiders", "__init__.py")
+    ]
+    
+    for init_file in init_files:
+        if not os.path.exists(init_file):
+            with open(init_file, "w") as f:
+                f.write("# Package initialization\n")
+            print(f"Created {init_file}")
+    
+    # Run copy_spiders.py to ensure spider files are in place
+    copy_script = os.path.join(project_dir, "copy_spiders.py")
+    if os.path.exists(copy_script):
+        print("Running copy_spiders.py...")
+        result = subprocess.run([sys.executable, copy_script], check=False)
+        if result.returncode == 0:
+            print("✓ Spider files successfully set up")
+        else:
+            print("⚠️ Warning: copy_spiders.py returned non-zero exit code")
+    
+    # Check for environment variables
+    required_vars = ["DATABASE_URL", "PORT"]
+    missing_vars = [var for var in required_vars if not os.environ.get(var)]
+    if missing_vars:
+        print(f"⚠️ Warning: Missing environment variables: {', '.join(missing_vars)}")
+    
+    print("✓ Deploy setup completed")
+    return 0
 
 if __name__ == "__main__":
-    success = deploy_setup()
-    sys.exit(0 if success else 1)
+    sys.exit(main())

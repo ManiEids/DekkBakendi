@@ -2,21 +2,24 @@ services:
   - type: web
     name: DekkBakendi
     runtime: python
-    buildCommand: pip install -r requirements.txt && python deploy_setup.py && pip install -e .
+    buildCommand: python build.py
     startCommand: python copy_spiders.py && gunicorn app:app --timeout 600 --workers 1
     envVars:
       - key: PORT
         value: 10000
-      - key: PYTHON_VERSION
-        value: 3.9.12
-      - key: GUNICORN_CMD_ARGS
-        value: "--timeout 600 --workers 1"
       - key: DATABASE_URL
-        sync: false
+        value: postgresql://neondb_owner:npg_lrCXzKNO9A2t@ep-ancient-queen-a2bhzxqa-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require
+      - key: PRODUCTION
+        value: "true"
 
   - type: cron
     name: daily-scrape
     runtime: python
-    schedule: "0 0 * * *"
-    buildCommand: pip install -r requirements.txt && python deploy_setup.py && pip install -e .
-    startCommand: python copy_spiders.py && python Leita/run_all.py
+    schedule: "0 0 * * *"  # Run at midnight every day
+    buildCommand: python build.py
+    startCommand: python copy_spiders.py && python Leita/run_all.py && python database_update.py
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_lrCXzKNO9A2t@ep-ancient-queen-a2bhzxqa-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require
+      - key: PRODUCTION
+        value: "true"
