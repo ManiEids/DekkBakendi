@@ -1,14 +1,14 @@
 import os
 import json
 import subprocess
-import time
 import glob
-from multiprocessing import Pool
+import sys
 from pathlib import Path
 
-# Configure logging level to see detailed spider activity
-os.environ['SCRAPY_SETTINGS_MODULE'] = 'scrapy.settings'
-os.environ['SCRAPY_LOG_LEVEL'] = 'DEBUG'  # Use DEBUG to see detailed activity
+# Configure paths to work both locally and on Render
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+sys.path.insert(0, PROJECT_ROOT)
 
 spiders = [
     "dekkjahollin",
@@ -35,31 +35,38 @@ def delete_old_jsons():
 def run_spider(spider_name):
     """Run a spider and wait for it to complete."""
     print(f"🕷️ Running spider: {spider_name}")
+    
+    # Change to project root directory to ensure scrapy can find the spiders
+    os.chdir(PROJECT_ROOT)
+    
+    # Run spider with absolute path to make sure it finds the right configuration
+    cmd = [
+        'scrapy', 'crawl', 
+        spider_name, 
+        '-O', os.path.join(PROJECT_ROOT, f"{spider_name}.json"),
+    ]
+    print(f"Running command: {' '.join(cmd)}")
+    
     process = subprocess.Popen(
-        ['scrapy', 'crawl', spider_name, '-O', f'{spider_name}.json', '--logfile', f'{spider_name}.log', '-L', 'DEBUG'],
-        stdout=subprocess.PIPE,
+        cmd,
+        stdout=subprocess.PIPE, 
         stderr=subprocess.STDOUT,
-        universal_newlines=True
+        text=True,
+        bufsize=1
     )
     
-    # Echo the output to console in real-time to ensure it's captured in web interface
+    # Echo the output to console
     for line in process.stdout:
         print(line, end='', flush=True)
     
+    process.stdout.close()
     process.wait()
-    
-    # Also print log file contents to ensure they appear in the web interface
-    if os.path.exists(f'{spider_name}.log'):
-        print(f"--- Detailed logs from {spider_name}.log ---")
-        with open(f'{spider_name}.log', 'r') as log_file:
-            log_content = log_file.read()
-            print(log_content)
     
     if process.returncode == 0:
         print(f"✅ Finished spider: {spider_name}")
         return True
     else:
-        print(f"❌ Failed spider: {spider_name}")
+        print(f"❌ Failed spider: {spider_name} with return code {process.returncode}")
         return False
 
 def merge_json_files():
