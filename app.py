@@ -8,6 +8,13 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Run environment check on startup
+try:
+    import check_environment
+    check_environment.check_environment()
+except ImportError:
+    print("Warning: check_environment.py not found, skipping environment check")
+
 app = Flask(__name__, static_folder='static')
 
 # Store logs for display
@@ -49,6 +56,12 @@ def run_scrapers():
     def run_process():
         global is_running, scraper_logs
         try:
+            # First run the environment check to ensure spiders are available
+            env_script = os.path.join(os.path.dirname(__file__), "check_environment.py")
+            if os.path.exists(env_script):
+                scraper_logs.append("Running environment check...")
+                subprocess.run([sys.executable, env_script], check=True)
+            
             # Look for run_all.py in multiple possible locations
             possible_paths = [
                 "run_all.py",
@@ -94,7 +107,8 @@ def get_logs():
         yield "data: " + json.dumps({"logs": scraper_logs, "running": is_running}) + "\n\n"
         
         # Stream new logs as they come in
-        previous_log_length = len(scraper_logs)
+        previous_log_length = len(scraper_logs
+        )
         while True:
             if len(scraper_logs) > previous_log_length:
                 new_logs = scraper_logs[previous_log_length:]

@@ -3,7 +3,7 @@ services:
     name: DekkBakendi
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 600 --workers 1
+    startCommand: python copy_spiders.py && gunicorn app:app --timeout 600 --workers 1
     envVars:
       - key: PORT
         value: 10000
@@ -19,4 +19,4 @@ services:
     runtime: python
     schedule: "0 0 * * *"  # Run at midnight every day
     buildCommand: pip install -r requirements.txt
-    startCommand: python Leita/run_all.py
+    startCommand: python copy_spiders.py && python Leita/run_all.py

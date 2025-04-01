@@ -15,6 +15,12 @@ print(f"Current working directory: {os.getcwd()}")
 print(f"Project root: {PROJECT_ROOT}")
 print(f"Python path: {sys.path}")
 
+# Ensure spider files are where they should be
+copy_script = os.path.join(PROJECT_ROOT, "copy_spiders.py")
+if os.path.exists(copy_script):
+    print("\n🔄 Ensuring spider files are properly installed...")
+    subprocess.run([sys.executable, copy_script], check=True)
+
 # List of spiders to run
 spiders = [
     "dekkjahollin",
@@ -80,6 +86,17 @@ def run_spider_with_direct_runner(spider_name):
 
 def run_spider(spider_name):
     """Try multiple methods to run a spider"""
+    # First check if the spider file exists
+    spider_file = os.path.join(PROJECT_ROOT, 'Leita', 'spiders', f"{spider_name}.py")
+    if not os.path.exists(spider_file):
+        print(f"❌ Spider file doesn't exist: {spider_file}")
+        print("    Trying to fix by running copy_spiders.py...")
+        subprocess.run([sys.executable, os.path.join(PROJECT_ROOT, "copy_spiders.py")])
+        
+        if not os.path.exists(spider_file):
+            print(f"❌ Still can't find spider file {spider_name}.py")
+            return False
+
     # First try the direct runner
     if os.path.exists(os.path.join(PROJECT_ROOT, "run_spider_direct.py")):
         result = run_spider_with_direct_runner(spider_name)
