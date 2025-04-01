@@ -27,12 +27,14 @@ class DekkjahollinSpider(scrapy.Spider):
         'DOWNLOADER_MIDDLEWARES': {
             'scrapy.downloadermiddlewares.robotstxt.RobotsTxtMiddleware': None,
         },
-        'DOWNLOAD_DELAY': 0.5,
+        'DOWNLOAD_DELAY': 1.0,
         'AUTOTHROTTLE_ENABLED': True,
-        'AUTOTHROTTLE_TARGET_CONCURRENCY': 2.0,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 1.0,
         'DOWNLOAD_TIMEOUT': 30,  # 30 seconds timeout
         'CLOSESPIDER_PAGECOUNT': 100,  # Limit to 100 pages
         'CLOSESPIDER_TIMEOUT': 180,  # 3 minute timeout
+        'TELNETCONSOLE_ENABLED': False,  # Disable telnet console to prevent errors
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,  # Limit concurrent requests
     }
 
     def start_requests(self):

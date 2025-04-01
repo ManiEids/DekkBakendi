@@ -5,6 +5,7 @@ import threading
 import time
 import sys
 import datetime
+import signal
 from pathlib import Path
 from flask import Flask, jsonify, render_template, Response, stream_with_context, send_file
 from dotenv import load_dotenv
@@ -42,6 +43,12 @@ file_timestamps = {}
 # Database connection placeholder - will be implemented later
 db_connection = None
 
+# Define a timeout for spider processes (5 minutes)
+SPIDER_TIMEOUT = 300
+
+# Add a dict to track running spider processes
+running_processes = {}
+
 # Initialize database connection when needed
 def init_db_connection():
     global db_connection
@@ -74,7 +81,7 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 def run_specific_spider(spider_name):
-    global scraper_logs, running_spider
+    global scraper_logs, running_spider, running_processes
     
     # Record which spider is currently running
     running_spider = spider_name
@@ -124,6 +131,9 @@ def run_specific_spider(spider_name):
     output_file = os.path.join(script_dir, f"{spider_name}.json")
     scraper_logs.append(f"Output will go to: {output_file}")
     
+    # Set a start time for timeout tracking
+    start_time = time.time()
+    
     # If we have the spider file, try to run it
     if os.path.exists(spider_file):
         # Try direct runner first
@@ -138,19 +148,52 @@ def run_specific_spider(spider_name):
             ]
             
             try:
+                # Use preexec_fn on Unix systems to create a new process group
+                preexec_fn = os.setsid if hasattr(os, 'setsid') else None
+                
                 process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
-                    bufsize=1
+                    bufsize=1,
+                    preexec_fn=preexec_fn
                 )
+                
+                # Store the process ID for potential termination
+                running_processes[spider_name] = process.pid
                 
                 for line in iter(process.stdout.readline, ''):
                     scraper_logs.append(line.rstrip())
+                    
+                    # Check for timeout
+                    current_time = time.time()
+                    if current_time - start_time > SPIDER_TIMEOUT:
+                        scraper_logs.append(f"⚠️ Spider {spider_name} timed out after {SPIDER_TIMEOUT} seconds")
+                        # Kill the process group on Unix systems
+                        try:
+                            if hasattr(os, 'killpg'):
+                                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                            else:
+                                process.terminate()
+                        except Exception as e:
+                            scraper_logs.append(f"Error terminating process: {str(e)}")
+                        
+                        # Remove from running processes
+                        running_processes.pop(spider_name, None)
+                        
+                        # Check if any output was produced despite timeout
+                        if os.path.exists(output_file):
+                            scraper_logs.append(f"✅ Spider {spider_name} produced partial results before timeout")
+                            update_file_timestamps()
+                            return True
+                        return False
                 
                 process.stdout.close()
                 process.wait()
+                
+                # Remove from running processes
+                running_processes.pop(spider_name, None)
                 
                 if process.returncode == 0:
                     scraper_logs.append(f"✅ Spider {spider_name} completed successfully")
@@ -161,6 +204,8 @@ def run_specific_spider(spider_name):
                     scraper_logs.append(f"⚠️ Direct runner failed with code {process.returncode}")
             except Exception as e:
                 scraper_logs.append(f"⚠️ Error running direct runner: {str(e)}")
+                # Remove from running processes in case of exception
+                running_processes.pop(spider_name, None)
         
         # Fall back to scrapy command
         try:
@@ -310,6 +355,36 @@ def run_scrapers():
     
     threading.Thread(target=run_process).start()
     return jsonify({"status": "success", "message": "Scrapers started"})
+
+@app.route('/cancel')
+def cancel_running_spiders():
+    global running_processes, is_running, scraper_logs
+    
+    if not is_running:
+        return jsonify({"status": "error", "message": "No spiders are running"}), 400
+    
+    try:
+        # Terminate all running processes
+        for spider_name, pid in list(running_processes.items()):
+            try:
+                scraper_logs.append(f"Cancelling spider: {spider_name} (PID: {pid})")
+                if hasattr(os, 'killpg'):
+                    os.killpg(os.getpgid(pid), signal.SIGTERM)
+                else:
+                    os.kill(pid, signal.SIGTERM)
+                running_processes.pop(spider_name, None)
+            except ProcessLookupError:
+                scraper_logs.append(f"Process {pid} for {spider_name} not found")
+                running_processes.pop(spider_name, None)
+            except Exception as e:
+                scraper_logs.append(f"Error cancelling {spider_name}: {str(e)}")
+        
+        is_running = False
+        running_spider = None
+        scraper_logs.append("All running spiders cancelled")
+        return jsonify({"status": "success", "message": "Cancelled all running spiders"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
 
 @app.route('/logs')
 def get_logs():

@@ -38,6 +38,9 @@
             background-color: #cccccc;
             cursor: not-allowed;
         }
+        .cancel-button {
+            background-color: #f44336;
+        }
         .spider-button {
             background-color: #3498db;
             padding: 8px 15px;
@@ -52,9 +55,22 @@
         .data-links {
             margin-top: 20px;
         }
-        .data-links a {
-            margin-right: 10px;
+        .file-item {
+            margin-bottom: 15px;
+        }
+        .file-link {
             color: #0066cc;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .file-link:hover {
+            text-decoration: underline;
+        }
+        .timestamp {
+            display: block;
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 3px;
         }
         .status {
             margin-top: 10px;
@@ -65,6 +81,11 @@
             padding-bottom: 15px;
             border-bottom: 1px solid #eee;
         }
+        .control-panel {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
@@ -72,7 +93,10 @@
     
     <div class="section">
         <h2>Run All Spiders</h2>
-        <button id="runAllButton" class="button">Run All Scrapers</button>
+        <div class="control-panel">
+            <button id="runAllButton" class="button">Run All Scrapers</button>
+            <button id="cancelButton" class="button cancel-button" style="display: none;">Cancel Running Spiders</button>
+        </div>
         <p id="statusAll" class="status">Ready to run all scrapers</p>
     </div>
     
@@ -91,18 +115,24 @@
     
     <div class="data-links">
         <h2>Data Files:</h2>
-        <a href="/data/combined_tire_data.json" target="_blank">Combined Data</a>
-        <a href="/data/n1.json" target="_blank">N1</a>
-        <a href="/data/nesdekk.json" target="_blank">Nesdekk</a>
-        <a href="/data/dekkjahollin.json" target="_blank">Dekkjahollin</a>
-        <a href="/data/dekkjasalan.json" target="_blank">Dekkjasalan</a>
-        <a href="/data/mitra.json" target="_blank">Mitra</a>
-        <a href="/data/klettur.json" target="_blank">Klettur</a>
+        
+        <div class="file-item">
+            <a href="/data/combined_tire_data.json" target="_blank" class="file-link">Combined Data</a>
+            <span class="timestamp" id="timestamp-combined_tire_data.json">{{ timestamps.get('combined_tire_data.json', 'Not available') }}</span>
+        </div>
+        
+        {% for spider in spiders %}
+        <div class="file-item">
+            <a href="/data/{{ spider }}.json" target="_blank" class="file-link">{{ spider }}</a>
+            <span class="timestamp" id="timestamp-{{ spider }}.json">{{ timestamps.get(spider + '.json', 'Not available') }}</span>
+        </div>
+        {% endfor %}
     </div>
 
     <script>
         const logContainer = document.getElementById('log-container');
         const runAllButton = document.getElementById('runAllButton');
+        const cancelButton = document.getElementById('cancelButton');
         const statusAllText = document.getElementById('statusAll');
         const statusSingleText = document.getElementById('statusSingle');
         const spiderButtons = document.querySelectorAll('.spider-button');
@@ -118,6 +148,7 @@
                 
                 if (response.ok) {
                     statusAllText.textContent = "All scrapers running...";
+                    cancelButton.style.display = "block";
                 } else {
                     statusAllText.textContent = `Error: ${data.message}`;
                     disableAllButtons(false);
@@ -125,6 +156,22 @@
             } catch (error) {
                 statusAllText.textContent = `Error: ${error.message}`;
                 disableAllButtons(false);
+            }
+        });
+        
+        // Cancel running spiders
+        cancelButton.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/cancel');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    statusAllText.textContent = "Cancelling running spiders...";
+                } else {
+                    statusAllText.textContent = `Error: ${data.message}`;
+                }
+            } catch (error) {
+                statusAllText.textContent = `Error cancelling: ${error.message}`;
             }
         });
         
@@ -141,6 +188,7 @@
                     
                     if (response.ok) {
                         statusSingleText.textContent = `${spiderName} running...`;
+                        cancelButton.style.display = "block";
                     } else {
                         statusSingleText.textContent = `Error: ${data.message}`;
                         disableAllButtons(false);
@@ -160,11 +208,26 @@
             });
         }
         
+        // Update timestamps
+        function updateTimestamps(timestamps) {
+            if (timestamps) {
+                for (const [filename, timestamp] of Object.entries(timestamps)) {
+                    const timestampElement = document.getElementById(`timestamp-${filename}`);
+                    if (timestampElement) {
+                        timestampElement.textContent = timestamp;
+                    }
+                }
+            }
+        }
+        
         // Set up event source for logs
         const eventSource = new EventSource('/logs');
         
         eventSource.onmessage = function(event) {
             const data = JSON.parse(event.data);
+            
+            // Update timestamps
+            updateTimestamps(data.timestamps);
             
             if (data.logs && data.logs.length > 0) {
                 data.logs.forEach(log => {
@@ -181,6 +244,7 @@
                 statusAllText.textContent = "Ready to run all scrapers";
                 statusSingleText.textContent = "Select a spider to run";
                 disableAllButtons(false);
+                cancelButton.style.display = "none";
             }
         };
         
