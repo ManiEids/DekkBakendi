@@ -6,43 +6,19 @@ class DekkjahollinSpider(scrapy.Spider):
     name = "dekkjahollin"
     allowed_domains = ["dekkjahollin.is"]
 
-    # Mapping of rim size to realistic width and aspect ratio (height) values.
+    # Simplified mapping with fewer combinations to complete faster
     rim_mapping = {
-        "14": {
-            "widths": ["155", "165", "175", "185", "195"],
-            "heights": ["75", "70", "65", "60", "55"]
-        },
         "15": {
-            "widths": ["175", "185", "195", "205", "215", "225"],
-            "heights": ["70", "65", "60", "55", "50"]
+            "widths": ["195", "205", "215"],
+            "heights": ["65", "60", "55"]
         },
         "16": {
-            "widths": ["195", "205", "215", "225", "235"],
-            "heights": ["65", "60", "55", "50", "45"]
+            "widths": ["205", "215", "225"],
+            "heights": ["60", "55", "50"]
         },
         "17": {
-            "widths": ["205", "215", "225", "235", "245", "255"],
-            "heights": ["65", "60", "55", "50", "45", "40"]
-        },
-        "18": {
-            "widths": ["225", "235", "245", "255", "265"],
-            "heights": ["60", "55", "50", "45", "40"]
-        },
-        "19": {
-            "widths": ["235", "245", "255", "265", "275"],
-            "heights": ["55", "50", "45", "40"]
-        },
-        "20": {
-            "widths": ["245", "255", "265", "275", "285", "295", "305", "315"],
-            "heights": ["55", "50", "45", "40", "35", "30"]
-        },
-        "21": {
-            "widths": ["255", "265", "275", "285", "295", "305", "315"],
-            "heights": ["45", "40", "35", "30"]
-        },
-        "22": {
-            "widths": ["265", "275", "285", "295", "305", "315"],
-            "heights": ["40", "35", "30"]
+            "widths": ["215", "225", "235"],
+            "heights": ["55", "50", "45"]
         }
     }
 
@@ -53,6 +29,10 @@ class DekkjahollinSpider(scrapy.Spider):
         },
         'DOWNLOAD_DELAY': 0.5,
         'AUTOTHROTTLE_ENABLED': True,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 2.0,
+        'DOWNLOAD_TIMEOUT': 30,  # 30 seconds timeout
+        'CLOSESPIDER_PAGECOUNT': 100,  # Limit to 100 pages
+        'CLOSESPIDER_TIMEOUT': 180,  # 3 minute timeout
     }
 
     def start_requests(self):
