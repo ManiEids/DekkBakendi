@@ -1,0 +1,4 @@
+Flask==2.3.3
+Scrapy==2.11.0
+gunicorn==21.2.0
+# Add any other dependencies your project needs here

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tire Scraper Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #log-container {
+            background-color: #1e1e1e;
+            color: #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            height: 500px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .data-links {
+            margin-top: 20px;
+        }
+        .data-links a {
+            margin-right: 10px;
+            color: #0066cc;
+        }
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tire Scraper Dashboard</h1>
+    
+    <button id="runButton" class="button">Run Scrapers</button>
+    <p id="status" class="status">Ready to run scrapers</p>
+    
+    <h2>Log Output:</h2>
+    <div id="log-container"></div>
+    
+    <div class="data-links">
+        <h2>Data Files:</h2>
+        <a href="/data/combined_tire_data.json" target="_blank">Combined Data</a>
+        <a href="/data/n1.json" target="_blank">N1</a>
+        <a href="/data/nesdekk.json" target="_blank">Nesdekk</a>
+        <a href="/data/dekkjahollin.json" target="_blank">Dekkjahollin</a>
+        <a href="/data/dekkjahusid.json" target="_blank">Dekkjahusid</a>
+        <a href="/data/max1.json" target="_blank">Max1</a>
+        <a href="/data/hjolbardasalan.json" target="_blank">Hjolbardasalan</a>
+    </div>
+
+    <script>
+        const logContainer = document.getElementById('log-container');
+        const runButton = document.getElementById('runButton');
+        const statusText = document.getElementById('status');
+        
+        runButton.addEventListener('click', async () => {
+            try {
+                runButton.disabled = true;
+                statusText.textContent = "Starting scrapers...";
+                
+                const response = await fetch('/run-scrapers');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    statusText.textContent = "Scrapers running...";
+                } else {
+                    statusText.textContent = `Error: ${data.message}`;
+                    runButton.disabled = false;
+                }
+            } catch (error) {
+                statusText.textContent = `Error: ${error.message}`;
+                runButton.disabled = false;
+            }
+        });
+        
+        // Set up event source for logs
+        const eventSource = new EventSource('/logs');
+        
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.logs && data.logs.length > 0) {
+                data.logs.forEach(log => {
+                    const logLine = document.createElement('div');
+                    logLine.textContent = log;
+                    logContainer.appendChild(logLine);
+                });
+                
+                // Auto-scroll to bottom
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+            
+            if (data.running === false) {
+                statusText.textContent = "Scrapers finished";
+                runButton.disabled = false;
+            }
+        };
+        
+        eventSource.onerror = function() {
+            statusText.textContent = "Connection lost. Please refresh the page.";
+        };
+    </script>
+</body>
+</html>
