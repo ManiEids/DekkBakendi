@@ -2,6 +2,7 @@ import json
 import re
 from pathlib import Path
 import os
+import sys  # Add missing import here
 
 def parse_size(size_str):
     if not size_str:

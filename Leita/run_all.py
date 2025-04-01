@@ -110,11 +110,15 @@ def run_spider(spider_name):
     os.chdir(BASE_DIR)
     print(f"Changed directory to: {os.getcwd()}")
     
+    # Make sure the output path is absolute
+    output_path = os.path.abspath(os.path.join(PROJECT_ROOT, f"{spider_name}.json"))
+    print(f"Output will be saved to: {output_path}")
+    
     # Try direct scrapy command with just the spider name
     cmd = [
         'scrapy', 'crawl', 
         spider_name, 
-        '-O', os.path.join(PROJECT_ROOT, f"{spider_name}.json"),
+        '-O', output_path,
     ]
     print(f"Running command: {' '.join(cmd)}")
     

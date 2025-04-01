@@ -32,9 +32,15 @@ AUTOTHROTTLE_START_DELAY = 3.0
 AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
 CONCURRENT_REQUESTS_PER_DOMAIN = 2
 
-# Enable spider middlewares to handle telnet console errors
+# Enable spider middlewares - make sure to use correct path
 SPIDER_MIDDLEWARES = {
     'Leita.middlewares.TelnetConsoleFixMiddleware': 100,
+    'Leita.middlewares.LeitaSpiderMiddleware': 543,
+}
+
+# Configure downloader middlewares
+DOWNLOADER_MIDDLEWARES = {
+    'Leita.middlewares.LeitaDownloaderMiddleware': 543,
 }
 
 # Explicitly disable telnet console in multiple places to make sure it's off
